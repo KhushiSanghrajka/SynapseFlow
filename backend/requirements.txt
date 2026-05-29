@@ -1,0 +1,15 @@
+fastapi==0.115.10
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.39
+pydantic==2.10.6
+pydantic-settings==2.8.1
+python-dotenv==1.0.1
+langgraph==0.2.67
+langchain-core==0.3.40
+azure-ai-inference==1.0.0b9
+azure-core==1.32.0
+openai==1.60.2
+python-telegram-bot==21.10
+httpx==0.28.1
+pytest==8.3.5
+rich==13.9.4
