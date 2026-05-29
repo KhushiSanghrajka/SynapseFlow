@@ -488,13 +488,14 @@ class OrchestratorService:
 
         if execution_id:
             with SessionLocal() as db:
+                safe_metadata = self._json_safe(event.get("metadata", {}))
                 db.add(
                     LogEvent(
                         execution_id=execution_id,
                         level=event.get("level", "info"),
                         event_type=event.get("event_type", "runtime"),
                         message=event.get("message", ""),
-                        metadata_json=event.get("metadata", {}),
+                        metadata_json=safe_metadata,
                     )
                 )
                 db.commit()
@@ -519,6 +520,22 @@ class OrchestratorService:
         execution_part = f"[{execution_id}] " if execution_id else ""
         line = f"[bold {color}]{event_type}[/bold {color}] {execution_part}{message}{meta_text}"
         self._logger.log(level, line)
+
+    @staticmethod
+    def _json_safe(value: Any) -> Any:
+        if hasattr(value, "model_dump"):
+            value = value.model_dump()
+        if isinstance(value, dict):
+            return {key: OrchestratorService._json_safe(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [OrchestratorService._json_safe(item) for item in value]
+        if isinstance(value, tuple):
+            return [OrchestratorService._json_safe(item) for item in value]
+        if isinstance(value, set):
+            return [OrchestratorService._json_safe(item) for item in sorted(value, key=str)]
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        return str(value)
 
     @staticmethod
     def _event_level(event_type: str) -> int:

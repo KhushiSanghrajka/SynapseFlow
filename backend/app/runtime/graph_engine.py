@@ -189,7 +189,7 @@ class GraphExecutionEngine:
                             "metadata": {
                                 "source": edge.source,
                                 "target": edge.target,
-                                "condition": edge.condition,
+                                "condition": edge.condition.model_dump() if hasattr(edge.condition, "model_dump") else edge.condition,
                                 "edge_id": edge.id,
                             },
                         }

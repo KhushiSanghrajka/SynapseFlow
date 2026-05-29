@@ -10,6 +10,19 @@ function summarizeText(text, limit = 120) {
   return `${value.slice(0, limit).trimEnd()}...`;
 }
 
+function formatFinalAnswer(text) {
+  const value = String(text || "").trim();
+  if (!value) return "No final answer yet.";
+  return value
+    .replace(/```[\s\S]*?```/g, (match) => match.replace(/```/g, ""))
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/__(.*?)__/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1")
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1 ($2)")
+    .trim();
+}
+
 function formatTimestamp(value) {
   if (!value) return "Now";
   const parsed = new Date(value);
@@ -242,7 +255,7 @@ export function RunMonitor({
               <div className="final-output-box">
                 {selectedExecution.status === "running" && !finalOutputText
                   ? "Execution is running..."
-                  : finalOutputText || "No final answer yet."}
+                  : formatFinalAnswer(finalOutputText)}
               </div>
               <button className="subtle-btn inline-button" onClick={() => setShowRawOutput((value) => !value)}>
                 {showRawOutput ? "Hide raw output" : "Show raw output"}
