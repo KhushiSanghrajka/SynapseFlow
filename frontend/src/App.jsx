@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { CheckCircle2, CircleAlert, Disc3, X } from "lucide-react";
 
 import { api, openMonitoringSocket } from "./api";
 import { AgentPanel } from "./components/AgentPanel";
@@ -28,6 +28,8 @@ export default function App() {
   const [selectedWorkflowId, setSelectedWorkflowId] = useState("");
   const [selectedThreadId, setSelectedThreadId] = useState("");
   const [errorText, setErrorText] = useState("");
+  const [workflowDirty, setWorkflowDirty] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("Loading");
 
   const selectedWorkflow = useMemo(
     () => workflows.find((workflow) => workflow.id === selectedWorkflowId) || null,
@@ -85,6 +87,7 @@ export default function App() {
       setSelectedWorkflowId(workflowId);
       await refreshThreads(workflowId, true);
     }
+    setSaveStatus("Ready");
   }
 
   useEffect(() => {
@@ -147,6 +150,8 @@ export default function App() {
       setWorkflows(updated);
       setSelectedWorkflowId(created.id);
       await refreshThreads(created.id, true);
+      setWorkflowDirty(false);
+      setSaveStatus("Saved");
       setErrorText("");
     } catch (err) {
       setErrorText(err.message);
@@ -161,6 +166,8 @@ export default function App() {
       setWorkflows(updated);
       const nextId = updated[0]?.id || "";
       setSelectedWorkflowId(nextId);
+      setWorkflowDirty(false);
+      setSaveStatus(nextId ? "Ready" : "No workflow selected");
       if (nextId) await refreshThreads(nextId, true);
       setErrorText("");
     } catch (err) {
@@ -181,6 +188,8 @@ export default function App() {
       setWorkflows(updated);
       setSelectedWorkflowId(created.id);
       await refreshThreads(created.id, true);
+      setWorkflowDirty(false);
+      setSaveStatus("Saved");
       setErrorText("");
     } catch (err) {
       setErrorText(err.message);
@@ -197,6 +206,8 @@ export default function App() {
         ...partialPayload,
       });
       setWorkflows(await api.listWorkflows());
+      setWorkflowDirty(false);
+      setSaveStatus("Saved");
       setErrorText("");
     } catch (err) {
       setErrorText(err.message);
@@ -272,9 +283,20 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <header>
-        <h1>OrbitFlow Studio</h1>
-        <p>Design workflows visually and run agent threads like chat sessions.</p>
+      <header className="topbar">
+        <div className="brand-lockup">
+          <span className="brand-mark" aria-hidden="true">
+            <Disc3 size={16} />
+          </span>
+          <div>
+            <strong>Synapse Flow</strong>
+            <small>Workflow orchestration workspace</small>
+          </div>
+        </div>
+        <div className="save-status" title={workflowDirty ? "Unsaved workflow changes" : "Workflow save state"}>
+          {workflowDirty ? <CircleAlert size={14} /> : <CheckCircle2 size={14} />}
+          <span>{workflowDirty ? "Unsaved changes" : saveStatus}</span>
+        </div>
       </header>
       {errorText ? (
         <div className="error">
@@ -294,13 +316,22 @@ export default function App() {
         <WorkflowCanvas
           workflows={workflows}
           selectedWorkflowId={selectedWorkflowId}
-          onSelectWorkflow={setSelectedWorkflowId}
+          onSelectWorkflow={(workflowId) => {
+            setSelectedWorkflowId(workflowId);
+            setWorkflowDirty(false);
+            setSaveStatus(workflowId ? "Ready" : "No workflow selected");
+          }}
           agents={agents}
           onCreateWorkflow={createWorkflow}
           onDeleteWorkflow={deleteWorkflow}
           templates={templates}
           onCreateFromTemplate={createFromTemplate}
           onSaveWorkflow={saveWorkflow}
+          onDirtyChange={setWorkflowDirty}
+          onWorkflowSaved={() => {
+            setWorkflowDirty(false);
+            setSaveStatus("Saved");
+          }}
         />
         <RunMonitor
           agents={agents}
@@ -319,9 +350,22 @@ export default function App() {
           onRun={runWorkflow}
           executions={filteredExecutions}
           liveEvents={filteredLiveEvents}
-          summary={summary}
         />
       </div>
+      <footer className="status-bar">
+        <div>
+          <span>Total Runs</span>
+          <strong>{summary.executions || 0}</strong>
+        </div>
+        <div>
+          <span>Tokens</span>
+          <strong>{summary.tokens || 0}</strong>
+        </div>
+        <div>
+          <span>Est. Cost</span>
+          <strong>${Number(summary.cost_usd || 0).toFixed(4)}</strong>
+        </div>
+      </footer>
     </main>
   );
 }

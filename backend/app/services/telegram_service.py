@@ -53,7 +53,7 @@ class TelegramBridge:
 
     async def _on_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
-            "OrbitFlow Telegram Agent is live. Send any message and I will route it to the configured agent."
+            "Synapse Flow Telegram Agent is live. Send any message and I will route it to the configured agent."
         )
 
     async def _on_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

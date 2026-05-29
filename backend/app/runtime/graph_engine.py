@@ -200,13 +200,40 @@ class GraphExecutionEngine:
         return route
 
     @staticmethod
-    def _condition_matches(condition: str, text: str, state: RuntimeState) -> bool:
-        normalized = (condition or "always").strip()
+    def _condition_matches(condition: Any, text: str, state: RuntimeState) -> bool:
+        if hasattr(condition, "model_dump"):
+            condition = condition.model_dump()
+
+        if isinstance(condition, dict):
+            condition_type = str(condition.get("type", "always")).strip().lower()
+            if condition_type in {"always", "*"}:
+                return True
+            if condition_type == "contains":
+                probe = str(condition.get("keyword") or "").strip().lower()
+                return bool(probe) and probe in text.lower()
+            if condition_type == "length_gt":
+                threshold = int(condition.get("threshold") or 0)
+                return len(text) > threshold
+            if condition_type == "confidence":
+                expected = str(condition.get("confidence") or "").strip().lower()
+                current = str(
+                    state.get("agent_confidence") or state.get("confidence") or state.get("current_confidence") or ""
+                ).strip().lower()
+                return bool(expected) and current == expected
+            if condition_type == "on_error":
+                return bool(state.get("last_error") or state.get("error"))
+            normalized = condition_type
+        else:
+            normalized = str(condition or "always").strip().lower()
+
         if normalized in {"always", "*"}:
             return True
         if normalized.startswith("contains:"):
             probe = normalized.split(":", 1)[1].strip().lower()
             return probe in text.lower()
+        if normalized.startswith("length_gt:"):
+            threshold = int(normalized.split(":", 1)[1])
+            return len(text) > threshold
         if normalized.startswith("equals:"):
             probe = normalized.split(":", 1)[1].strip().lower()
             return text.strip().lower() == probe

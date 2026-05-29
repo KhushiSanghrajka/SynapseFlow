@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "OrbitFlow Orchestrator"
+    app_name: str = "Synapse Flow Orchestrator"
     api_prefix: str = "/api"
     database_url: str = "sqlite:///./orchestration.db"
     inference_base_url: str = Field(default="https://models.inference.ai.azure.com", alias="INFERENCE_BASE_URL")

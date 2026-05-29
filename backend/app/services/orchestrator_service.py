@@ -188,7 +188,7 @@ class OrchestratorService:
                 "id": f"{edge.source}-{edge.target}",
                 "source": edge.source,
                 "target": edge.target,
-                "condition": edge.condition,
+                "condition": edge.condition.model_dump() if hasattr(edge.condition, "model_dump") else edge.condition,
                 "label": edge.label,
             }
             for edge in template.edges
@@ -360,7 +360,7 @@ class OrchestratorService:
             if target is None:
                 target = db.scalars(select(Agent).limit(1)).first()
             if target is None:
-                return "No agents available. Create an agent first in OrbitFlow Studio."
+                return "No agents available. Create an agent first in Synapse Flow."
 
         response = await self._llm.complete(
             system_prompt=target.system_prompt,
@@ -553,7 +553,7 @@ class OrchestratorService:
 
             agents = [
                 Agent(
-                    name="Orbit Router",
+                    name="Strategy Agent",
                     role="support-router",
                     system_prompt=(
                         "You triage requests and send a concise direction for the response agent."
@@ -564,7 +564,7 @@ class OrchestratorService:
                     guardrails={"max_output_chars": 400},
                 ),
                 Agent(
-                    name="Orbit Responder",
+                    name="Draft Agent",
                     role="support-responder",
                     system_prompt=(
                         "You draft helpful user-facing responses based on router instructions."
@@ -574,7 +574,7 @@ class OrchestratorService:
                     channels=["web", "telegram"],
                 ),
                 Agent(
-                    name="Orbit Reviewer",
+                    name="Review Agent",
                     role="support-reviewer",
                     system_prompt=(
                         "You review response quality and return 'revise' only when critical issues remain."
@@ -605,7 +605,7 @@ class OrchestratorService:
             )
             db.add(
                 Workflow(
-                    name="OrbitFlow Support Loop",
+                    name="Support Loop",
                     description="Seeded support workflow with router-response-review loop.",
                     graph_json=graph.model_dump(),
                 )

@@ -1,6 +1,6 @@
-# OrbitFlow Studio
+# Synapse Flow
 
-OrbitFlow Studio is a local-first AI Agent Orchestration Platform: users create agents, wire them into visual workflows with conditions/loops, run tasks end-to-end, monitor execution live, and expose one agent through Telegram.
+Synapse Flow is a local-first AI Agent Orchestration Platform: users create agents, wire them into visual workflows with conditions/loops, run tasks end-to-end, monitor execution live, and expose one agent through Telegram.
 
 It is designed as an MVP that can be demoed like a mini n8n/LangGraph Studio.
 
@@ -27,7 +27,7 @@ It is designed as an MVP that can be demoed like a mini n8n/LangGraph Studio.
 ## Architecture
 
 ```text
-+------------------------------- OrbitFlow Studio ------------------------------+
++------------------------------- Synapse Flow --------------------------------+
 |                                                                               |
 |  React + Vite + React Flow UI                                                 |
 |  - Agent Forge (CRUD)                                                         |
@@ -147,7 +147,7 @@ npm run dev -- --host 0.0.0.0 --port 5173
 ## End-to-End Demo Flow (Support Example)
 
 1. Open `http://localhost:5173`.
-2. Use seeded workflow `OrbitFlow Support Loop`.
+2. Use seeded workflow `Support Loop`.
 3. Submit prompt in Session panel:
    - `Customer cannot log in after password reset. Ask for safe recovery steps and next actions.`
 4. Observe:
@@ -164,7 +164,7 @@ npm run dev -- --host 0.0.0.0 --port 5173
 
 Goal: prove `reviewer -> router` loop works when reviewer output contains `revise`.
 
-1. Open workflow `OrbitFlow Support Loop`.
+1. Open workflow `Support Loop`.
 2. Ensure edge conditions are:
    - `router -> responder = always`
    - `responder -> reviewer = always`

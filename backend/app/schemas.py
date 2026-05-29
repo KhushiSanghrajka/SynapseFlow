@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -45,11 +45,19 @@ class WorkflowNode(BaseModel):
     position: dict[str, float] = Field(default_factory=lambda: {"x": 0, "y": 0})
 
 
+class WorkflowCondition(BaseModel):
+    type: Literal["always", "contains", "length_gt", "confidence", "on_error"] = "always"
+    keyword: str | None = None
+    threshold: int | None = None
+    confidence: Literal["high", "medium", "low"] | None = None
+    action: Literal["retry", "skip"] | None = None
+
+
 class WorkflowEdge(BaseModel):
     id: str
     source: str
     target: str
-    condition: str = "always"
+    condition: WorkflowCondition | str = Field(default_factory=WorkflowCondition)
     label: str = "always"
 
 
@@ -94,7 +102,7 @@ class TemplateNode(BaseModel):
 class TemplateEdge(BaseModel):
     source: str
     target: str
-    condition: str
+    condition: WorkflowCondition | str
     label: str
 
 

@@ -1,2 +1,2 @@
-"""OrbitFlow backend package."""
+"""Synapse Flow backend package."""
 
