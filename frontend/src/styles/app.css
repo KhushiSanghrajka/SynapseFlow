@@ -240,15 +240,36 @@ button:disabled {
 }
 
 .canvas-toolbar {
+  position: relative;
+  z-index: 4;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+  margin-top: 2px;
   margin-bottom: 8px;
   padding: 10px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: rgba(12, 17, 24, 0.44);
+}
+
+.canvas-toolbar .icon-btn {
+  min-width: 36px;
+  min-height: 36px;
+  background: linear-gradient(95deg, rgba(110, 134, 255, 0.95), rgba(138, 125, 255, 0.95));
+  color: #0b1020;
+  border: 1px solid rgba(138, 125, 255, 0.35);
+}
+
+.canvas-toolbar .icon-btn.danger {
+  background: linear-gradient(95deg, #ff7893, #ff5757);
+  color: #21080b;
+}
+
+.canvas-toolbar .icon-btn.subtle-btn {
+  background: rgba(26, 34, 48, 0.96);
+  color: var(--text);
 }
 
 .canvas-hint {
@@ -363,10 +384,13 @@ button:disabled {
 }
 
 .react-flow__controls {
-  background: rgba(19, 26, 36, 0.58) !important;
-  border: 1px solid rgba(138, 125, 255, 0.16) !important;
-  box-shadow: 0 8px 18px rgba(6, 10, 19, 0.3);
-  opacity: 0.72;
+  background: rgba(19, 26, 36, 0.96) !important;
+  border: 1px solid rgba(138, 125, 255, 0.28) !important;
+  box-shadow: 0 10px 22px rgba(6, 10, 19, 0.42);
+  opacity: 1;
+  z-index: 20;
+  left: 12px !important;
+  bottom: 12px !important;
 }
 
 .react-flow__controls button {
@@ -376,7 +400,9 @@ button:disabled {
 }
 
 .flow-controls {
-  opacity: 0.78;
+  opacity: 1;
+  transform: scale(1.03);
+  transform-origin: bottom left;
 }
 
 .react-flow__attribution {

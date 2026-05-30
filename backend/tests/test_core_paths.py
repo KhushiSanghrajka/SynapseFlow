@@ -1,10 +1,13 @@
 import time
 import uuid
+import asyncio
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.runtime.graph_engine import GraphExecutionEngine
 
 
 @pytest.fixture()
@@ -103,3 +106,54 @@ def test_inter_agent_message_delivery(client: TestClient):
     assert messages_response.status_code == 200
     messages = messages_response.json()
     assert len(messages) >= 1
+
+
+def test_natural_language_edge_condition_can_match():
+    class FakeLLMClient:
+        async def complete(self, *, system_prompt: str, user_prompt: str, model: str):
+            return SimpleNamespace(content="YES", prompt_tokens=0, completion_tokens=0, total_tokens=0, estimated_cost_usd=0.0)
+
+    engine = GraphExecutionEngine(FakeLLMClient())
+    state = {
+        "workflow_input": "Need help with tax calculation in India.",
+        "current_output": "Please verify the old regime and new regime options before answering.",
+        "outputs": {},
+        "steps": 2,
+    }
+
+    matched = asyncio.run(
+        engine._condition_matches(
+            "route to fact checker if the answer appears uncertain",
+            state["current_output"],
+            state,
+        )
+    )
+    assert matched is True
+
+
+def test_workflow_rename_keeps_names_unique(client: TestClient):
+    workflows = client.get("/api/workflows").json()
+    assert workflows, "Seeded workflow expected."
+
+    created_response = client.post(
+        "/api/workflows",
+        json={
+            "name": f"Rename Target {uuid.uuid4().hex[:8]}",
+            "description": "Rename test workflow",
+            "graph": {
+                "entry_node_id": "start-node",
+                "max_steps": 3,
+                "nodes": [],
+                "edges": [],
+            },
+        },
+    )
+    assert created_response.status_code == 201
+    created = created_response.json()
+
+    duplicate_name = workflows[0]["name"]
+    update_response = client.put(f"/api/workflows/{created['id']}", json={"name": duplicate_name})
+    assert update_response.status_code == 200
+    updated = update_response.json()
+    assert updated["name"].startswith(duplicate_name)
+    assert updated["name"] != duplicate_name

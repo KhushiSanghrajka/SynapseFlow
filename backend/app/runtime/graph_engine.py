@@ -180,7 +180,7 @@ class GraphExecutionEngine:
 
             text = state.get("current_output", "")
             for edge in outgoing:
-                if self._condition_matches(edge.condition, text, state):
+                if await self._condition_matches(edge.condition, text, state):
                     await on_event(
                         {
                             "execution_id": state.get("execution_id"),
@@ -199,8 +199,7 @@ class GraphExecutionEngine:
 
         return route
 
-    @staticmethod
-    def _condition_matches(condition: Any, text: str, state: RuntimeState) -> bool:
+    async def _condition_matches(self, condition: Any, text: str, state: RuntimeState) -> bool:
         if hasattr(condition, "model_dump"):
             condition = condition.model_dump()
 
@@ -222,6 +221,12 @@ class GraphExecutionEngine:
                 return bool(expected) and current == expected
             if condition_type == "on_error":
                 return bool(state.get("last_error") or state.get("error"))
+            if condition_type in {"freeform", "natural_language", "natural-language", "nl"}:
+                return await self._evaluate_freeform_condition(
+                    str(condition.get("text") or condition.get("rule") or condition.get("prompt") or ""),
+                    text,
+                    state,
+                )
             normalized = condition_type
         else:
             normalized = str(condition or "always").strip().lower()
@@ -243,4 +248,54 @@ class GraphExecutionEngine:
         if normalized.startswith("step_lt:"):
             threshold = int(normalized.split(":", 1)[1])
             return int(state.get("steps", 0)) < threshold
-        return False
+        return await self._evaluate_freeform_condition(str(condition or ""), text, state)
+
+    async def _evaluate_freeform_condition(self, condition: str, text: str, state: RuntimeState) -> bool:
+        cleaned_condition = str(condition or "").strip()
+        if not cleaned_condition:
+            return True
+
+        if getattr(getattr(self._llm_client, "_settings", None), "mock_llm", False):
+            return self._heuristic_condition_match(cleaned_condition, text)
+
+        prompt = (
+            "Route this workflow edge. Return only YES or NO. "
+            "Answer YES if the route condition is satisfied by the current node output.\n\n"
+            f"Route condition:\n{cleaned_condition}\n\n"
+            f"Current node output:\n{text}\n\n"
+            f"Workflow input:\n{state.get('workflow_input', '')}\n\n"
+            f"Current step: {state.get('steps', 0)}\n"
+            f"Current outputs: {json.dumps(state.get('outputs', {}), ensure_ascii=True)}"
+        )
+        try:
+            response = await self._llm_client.complete(
+                system_prompt="You are a strict binary router. Reply with YES or NO only.",
+                user_prompt=prompt,
+                model="openai/gpt-4.1-mini",
+            )
+        except Exception:
+            return self._heuristic_condition_match(cleaned_condition, text)
+
+        verdict = (response.content or "").strip().lower()
+        if verdict.startswith("yes"):
+            return True
+        if verdict.startswith("no"):
+            return False
+        return self._heuristic_condition_match(cleaned_condition, text)
+
+    @staticmethod
+    def _heuristic_condition_match(condition: str, text: str) -> bool:
+        normalized_condition = re.sub(r"[^a-z0-9\s]", " ", condition.lower())
+        normalized_text = re.sub(r"[^a-z0-9\s]", " ", text.lower())
+        condition_words = [word for word in normalized_condition.split() if len(word) > 3]
+        if not condition_words:
+            return False
+
+        quoted_phrases = re.findall(r'"([^"]+)"|\'([^\']+)\'', condition)
+        for double_quoted, single_quoted in quoted_phrases:
+            phrase = double_quoted or single_quoted
+            if phrase and phrase.strip().lower() in normalized_text:
+                return True
+
+        overlap = sum(1 for word in set(condition_words) if word in normalized_text)
+        return overlap >= 2 or (overlap >= 1 and len(condition_words) <= 3)

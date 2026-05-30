@@ -95,6 +95,8 @@ class OrchestratorService:
         if "graph" in values:
             graph = values.pop("graph")
             values["graph_json"] = graph if isinstance(graph, dict) else graph.model_dump()
+        if "name" in values:
+            values["name"] = self._ensure_unique_workflow_name(db, str(values["name"]))
         for key, value in values.items():
             setattr(workflow, key, value)
         db.add(workflow)

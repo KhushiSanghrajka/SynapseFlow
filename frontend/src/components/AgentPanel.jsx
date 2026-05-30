@@ -23,6 +23,13 @@ function formatRole(role) {
     .join(" ");
 }
 
+function formatTool(tool) {
+  return tool
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export function AgentPanel({ agents, capabilities, onCreateAgent }) {
   const [form, setForm] = useState(defaultForm);
   const [busy, setBusy] = useState(false);
@@ -116,6 +123,17 @@ export function AgentPanel({ agents, capabilities, onCreateAgent }) {
             <div className="agent-card-name">{agent.name}</div>
             <div className="agent-card-role">{formatRole(agent.role)}</div>
             <small>{agent.model}</small>
+            <div className="badge-row">
+              {(agent.tools || []).length > 0 ? (
+                (agent.tools || []).map((tool) => (
+                  <span key={tool} className="badge">
+                    {formatTool(tool)}
+                  </span>
+                ))
+              ) : (
+                <span className="badge muted">No tools</span>
+              )}
+            </div>
             <div className="badge-row">
               {(agent.channels || []).length > 0 ? (
                 (agent.channels || []).map((channel) => (

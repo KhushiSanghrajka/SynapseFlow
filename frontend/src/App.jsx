@@ -198,7 +198,7 @@ export default function App() {
 
   async function saveWorkflow(workflowId, partialPayload) {
     const workflow = workflows.find((item) => item.id === workflowId);
-    if (!workflow) return;
+    if (!workflow) return false;
     try {
       await api.updateWorkflow(workflowId, {
         name: workflow.name,
@@ -208,6 +208,23 @@ export default function App() {
       setWorkflows(await api.listWorkflows());
       setWorkflowDirty(false);
       setSaveStatus("Saved");
+      setErrorText("");
+      return true;
+    } catch (err) {
+      setErrorText(err.message);
+      return false;
+    }
+  }
+
+  async function renameWorkflow(workflowId) {
+    if (!workflowId) return;
+    const current = workflows.find((item) => item.id === workflowId);
+    const nextName = window.prompt("Rename workflow", current?.name || "Workflow");
+    if (!nextName) return;
+    try {
+      await api.updateWorkflow(workflowId, { name: nextName });
+      const updated = await api.listWorkflows();
+      setWorkflows(updated);
       setErrorText("");
     } catch (err) {
       setErrorText(err.message);
@@ -324,6 +341,7 @@ export default function App() {
           agents={agents}
           onCreateWorkflow={createWorkflow}
           onDeleteWorkflow={deleteWorkflow}
+          onRenameWorkflow={renameWorkflow}
           templates={templates}
           onCreateFromTemplate={createFromTemplate}
           onSaveWorkflow={saveWorkflow}

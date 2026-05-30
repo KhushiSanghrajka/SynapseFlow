@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Plus, Save, Trash2, WandSparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { PencilLine, Plus, Save, Trash2, WandSparkles } from "lucide-react";
 import ReactFlow, {
   Background,
   Controls,
@@ -17,6 +17,7 @@ const CONDITION_OPTIONS = [
   { value: "length_gt", label: "If output length > n" },
   { value: "confidence", label: "If agent confidence matches" },
   { value: "on_error", label: "On error" },
+  { value: "freeform", label: "Natural language rule" },
 ];
 
 const CONFIDENCE_OPTIONS = ["high", "medium", "low"];
@@ -27,11 +28,22 @@ function getAgentAccent(agentId) {
   return `hsl(${seed % 360} 78% 56%)`;
 }
 
+function formatTool(tool) {
+  return String(tool || "")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function normalizeCondition(condition) {
   if (!condition) return { type: "always" };
   if (typeof condition === "object") {
     if (typeof condition.model_dump === "function") {
       return normalizeCondition(condition.model_dump());
+    }
+    if (String(condition.type || "").toLowerCase() === "freeform") {
+      return { type: "freeform", text: condition.text || condition.rule || condition.prompt || "" };
     }
     return {
       type: condition.type || "always",
@@ -55,7 +67,14 @@ function normalizeCondition(condition) {
   if (normalized.startsWith("on_error:")) {
     return { type: "on_error", action: tail || "retry" };
   }
-  return { type: normalized || "always" };
+  const raw = String(condition).trim();
+  if (!raw) {
+    return { type: "always" };
+  }
+  if (["always", "*"].includes(normalized)) {
+    return { type: "always" };
+  }
+  return { type: "freeform", text: raw };
 }
 
 function conditionLabel(condition) {
@@ -71,6 +90,10 @@ function conditionLabel(condition) {
   }
   if (resolved.type === "on_error") {
     return resolved.action ? `On error -> ${resolved.action}` : "On error";
+  }
+  if (resolved.type === "freeform") {
+    const preview = (resolved.text || "").trim();
+    return preview ? `Rule: ${preview.slice(0, 36)}${preview.length > 36 ? "..." : ""}` : "Natural language rule";
   }
   return "Always continue";
 }
@@ -89,7 +112,30 @@ function serializeCondition(condition) {
   if (resolved.type === "on_error") {
     return { type: "on_error", action: resolved.action || "retry" };
   }
+  if (resolved.type === "freeform") {
+    return (resolved.text || "").trim() || { type: "always" };
+  }
   return { type: "always" };
+}
+
+function serializeGraphSnapshot(nodes, edges, maxSteps) {
+  return JSON.stringify({
+    entry_node_id: nodes[0]?.id || "start-node",
+    max_steps: Math.max(1, Math.min(20, Number(maxSteps) || 6)),
+    nodes: nodes.map((node) => ({
+      id: node.id,
+      label: node.data?.label || node.label || "",
+      agent_id: node.data?.agentId || node.agent_id || "",
+      position: node.position,
+    })),
+    edges: edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label || conditionLabel(edge.data?.condition || "always"),
+      condition: serializeCondition(edge.data?.condition || "always"),
+    })),
+  });
 }
 
 function AgentNode({ data }) {
@@ -100,6 +146,17 @@ function AgentNode({ data }) {
       <div className="workflow-node-title">{data.label}</div>
       <div className="workflow-node-role">{data.role}</div>
       <div className="workflow-node-meta">{data.agentName}</div>
+      <div className="badge-row workflow-node-badges">
+        {(data.tools || []).length > 0 ? (
+          (data.tools || []).map((tool) => (
+            <span key={tool} className="badge">
+              {formatTool(tool)}
+            </span>
+          ))
+        ) : (
+          <span className="badge muted">No tools</span>
+        )}
+      </div>
       <Handle type="source" position={Position.Bottom} className="workflow-handle" />
     </div>
   );
@@ -117,6 +174,7 @@ export function WorkflowCanvas({
   onCreateFromTemplate,
   templates,
   onSaveWorkflow,
+  onRenameWorkflow,
   onDirtyChange,
   onWorkflowSaved,
 }) {
@@ -132,6 +190,13 @@ export function WorkflowCanvas({
   const [maxSteps, setMaxSteps] = useState(6);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const [dirty, setDirty] = useState(false);
+  const nodeLabelById = useMemo(
+    () => Object.fromEntries(nodes.map((node) => [node.id, node.data?.label || node.label || node.id])),
+    [nodes]
+  );
+  const savedSnapshotRef = useRef("");
+  const saveInFlightRef = useRef(false);
+  const currentSnapshot = useMemo(() => serializeGraphSnapshot(nodes, edges, maxSteps), [nodes, edges, maxSteps]);
 
   useEffect(() => {
     if (!selectedWorkflow) {
@@ -150,6 +215,7 @@ export function WorkflowCanvas({
           agentId: node.agent_id,
           agentName: agentIndex[node.agent_id]?.name || node.label,
           role: agentIndex[node.agent_id]?.role || "",
+          tools: agentIndex[node.agent_id]?.tools || [],
           accent: getAgentAccent(node.agent_id),
         },
       }))
@@ -164,8 +230,15 @@ export function WorkflowCanvas({
       }))
     );
     setMaxSteps(selectedWorkflow.graph.max_steps || 6);
+    savedSnapshotRef.current = serializeGraphSnapshot(selectedWorkflow.graph.nodes || [], selectedWorkflow.graph.edges || [], selectedWorkflow.graph.max_steps || 6);
     setDirty(false);
   }, [selectedWorkflowId, workflows, agentIndex]);
+
+  useEffect(() => {
+    if (!selectedWorkflowId) return;
+    const nextDirty = currentSnapshot !== savedSnapshotRef.current;
+    setDirty(nextDirty);
+  }, [currentSnapshot, selectedWorkflowId]);
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -246,6 +319,7 @@ export function WorkflowCanvas({
           agentId: agent.id,
           agentName: agent.name,
           role: agent.role,
+          tools: agent.tools || [],
           accent: getAgentAccent(agent.id),
         },
       })
@@ -255,29 +329,25 @@ export function WorkflowCanvas({
     setTimeout(() => reactFlowInstance?.fitView({ padding: 0.2, duration: 250 }), 0);
   }
 
+  async function persistSave() {
+    if (!selectedWorkflowId) return;
+    const saved = await onSaveWorkflow(selectedWorkflowId, { graph: JSON.parse(currentSnapshot) });
+    if (saved) {
+      savedSnapshotRef.current = currentSnapshot;
+      setDirty(false);
+      onDirtyChange?.(false);
+      onWorkflowSaved?.();
+    }
+  }
+
   async function save() {
-    if (!selectedWorkflowId || nodes.length === 0) return;
-    await onSaveWorkflow(selectedWorkflowId, {
-      graph: {
-        entry_node_id: nodes[0].id,
-        max_steps: Math.max(1, Math.min(20, Number(maxSteps) || 6)),
-        nodes: nodes.map((node) => ({
-          id: node.id,
-          label: node.data.label,
-          agent_id: node.data.agentId,
-          position: node.position,
-        })),
-        edges: edges.map((edge) => ({
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          label: edge.label || conditionLabel(edge.data?.condition || "always"),
-          condition: serializeCondition(edge.data?.condition || "always"),
-        })),
-      },
-    });
-    setDirty(false);
-    onWorkflowSaved?.();
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    try {
+      await persistSave();
+    } finally {
+      saveInFlightRef.current = false;
+    }
   }
 
   return (
@@ -312,6 +382,14 @@ export function WorkflowCanvas({
           className="icon-btn danger"
         >
           <Trash2 size={16} />
+        </button>
+        <button
+          disabled={!selectedWorkflowId}
+          onClick={() => onRenameWorkflow?.(selectedWorkflowId)}
+          title="Rename Workflow"
+          className="icon-btn subtle-btn"
+        >
+          <PencilLine size={16} />
         </button>
       </div>
 
@@ -350,7 +428,17 @@ export function WorkflowCanvas({
           />
         </label>
         <span className="guardrail-pill">Max workflow steps: {maxSteps}</span>
-        <button title="Save workflow" className="icon-btn save-btn" onClick={save}>
+        <button
+          type="button"
+          title="Save workflow"
+          className="icon-btn save-btn"
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            void save();
+          }}
+          onClick={() => void save()}
+        >
           <Save size={16} />
         </button>
       </div>
@@ -403,19 +491,26 @@ export function WorkflowCanvas({
         {edges.length === 0 ? <div className="edge-empty">No connections yet. Create a line between two nodes first.</div> : null}
         {edges.map((edge) => {
           const active = normalizeCondition(edge.data?.condition || edge.condition || "always");
+          const sourceLabel = nodeLabelById[edge.source] || edge.source;
+          const targetLabel = nodeLabelById[edge.target] || edge.target;
           return (
             <div key={edge.id} className="edge-editor-row">
               <span>
-                {edge.source} -&gt; {edge.target}
+                {sourceLabel} -&gt; {targetLabel}
               </span>
               <div className="edge-condition-editor">
                 <select
                   value={active.type}
                   onChange={(e) =>
-                    updateEdgeCondition(edge.id, {
-                      ...active,
-                      type: e.target.value,
-                    })
+                    updateEdgeCondition(
+                      edge.id,
+                      e.target.value === "freeform"
+                        ? { type: "freeform", text: active.text || "" }
+                        : {
+                            ...active,
+                            type: e.target.value,
+                          }
+                    )
                   }
                 >
                   {CONDITION_OPTIONS.map((condition) => (
@@ -465,6 +560,13 @@ export function WorkflowCanvas({
                       </option>
                     ))}
                   </select>
+                ) : null}
+                {active.type === "freeform" ? (
+                  <input
+                    placeholder="e.g. route to fact checker if the response seems uncertain or unsupported"
+                    value={active.text || ""}
+                    onChange={(e) => updateEdgeCondition(edge.id, { type: "freeform", text: e.target.value })}
+                  />
                 ) : null}
               </div>
               <button
