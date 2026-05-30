@@ -1,262 +1,132 @@
-# Synapse Flow
+# Agent Orchestration Platform
 
-Synapse Flow is a local-first AI Agent Orchestration Platform: users create agents, wire them into visual workflows with conditions/loops, run tasks end-to-end, monitor execution live, and expose one agent through Telegram.
+This repository implements a local-first AI agent orchestration platform where users
+create configurable agents, wire them into visual workflows (with conditions and
+feedback loops), run workflows on a real runtime, and interact with agents via an
+external messaging channel. The project is designed to be runnable locally with a
+single command and to be demo-ready for an end-to-end workflow involving at least
+two agents and a live human conversation through a messaging channel.
 
-It is designed as an MVP that can be demoed like a mini n8n/LangGraph Studio.
+**Goals**
+- **Working demo**: run a multi-agent workflow end-to-end and interact with an agent via Telegram.
+- **Configurable agents**: personality, tools, schedules, memory, limits, channels.
+- **Visual workflow builder**: conditional routing, loops, and templates.
+- **Runtime-first**: agents execute real logic on a runtime (no UI-only mocks).
+- **Persisted history & monitoring**: message history, logs, token/cost telemetry.
 
-## Why This Is Demo-Ready
 
-- Agent CRUD with full config: `name`, `role`, `system_prompt`, `model`, `tools`, `channels`, `memory`, `guardrails`
-- Visual workflow builder (React Flow) with conditional edges and loop-back routes
-- 2 prebuilt templates:
-  - `Support Routing Loop`
-  - `Meeting Notes Loop`
-- Telegram integration via `python-telegram-bot` in polling mode (no webhook/public URL needed)
-- Live monitoring:
-  - WebSocket event stream
-  - execution logs
-  - inter-agent message trail
-  - token and estimated cost telemetry
-  - color-coded runtime logs in backend terminal
-- Threaded run history:
-  - create/select workflow threads (Chat-style sessions)
-  - clear history per thread or globally
-- Seeded demo workflow and 3 seeded agents (2+ agents executing a real task)
-- Local single-command bootstrap + run
 
-## Architecture
+**Repository Layout**
+- **`backend/`**: FastAPI app, runtime integration, services, DB models, tests.
+- **`frontend/`**: React + Vite web UI (visual workflow builder, agent management, monitoring).
+- **`run_local.py`**: convenience runner that bootstraps a local environment and starts services.
 
-```text
-+------------------------------- Synapse Flow --------------------------------+
-|                                                                               |
-|  React + Vite + React Flow UI                                                 |
-|  - Agent Forge (CRUD)                                                         |
-|  - Workflow Canvas (nodes, edges, conditions, loops)                          |
-|  - Session Panel (run + live feed + metrics)                                  |
-|                 |                                                             |
-|                 | REST + WebSocket                                            |
-|                 v                                                             |
-|  FastAPI Backend                                                              |
-|  - API Routes (agents/workflows/executions/monitoring)                        |
-|  - OrchestratorService                                                        |
-|  - LogBus (WebSocket broadcast)                                               |
-|  - TelegramBridge (polling)                                                   |
-|                 |                                                             |
-|                 v                                                             |
-|  LangGraph Runtime (StateGraph)                                               |
-|  - Node = Agent invocation                                                    |
-|  - Conditional routing                                                        |
-|  - Feedback loop support                                                      |
-|                 |                                                             |
-|                 v                                                             |
-|  Azure Inference Models (GitHub-backed)                                       |
-|  - OpenAI-compatible chat completions                                          |
-|  - OPENAI_API_KEY (or GITHUB_TOKEN) authentication                            |
-|                                                                               |
-|  Persistence: SQLite + SQLAlchemy                                             |
-|  - agents, workflows, executions, logs, inter-agent messages                  |
-+-------------------------------------------------------------------------------+
+**Key Features**
+- **Agent CRUD**: name, role, system prompt, model, tools, channels, memory, guardrails.
+- **Agent Configuration**: schedules, memory, skills, interaction rules, guardrails (e.g., `max_steps`).
+- **Visual Workflow Builder**: nodes, conditional edges, feedback loops, role mapping.
+- **Runtime Execution**: agents run on a stateful runtime (graph execution), not a UI mock.
+- **Templates**: pre-built workflow templates included.
+- **External Channel**: Telegram bridge so humans can chat with an agent.
+- **Monitoring**: real-time logs, inter-agent messages, token/cost tracking, WebSocket live feed.
+- **Persistence**: message history and execution logs stored in DB and visible in UI.
+
+**Technical Choices & Rationale**
+- **Language & Backend**: Python with FastAPI.
+	- Rationale: async-native HTTP/WebSocket support, ecosystem for background tasks, fits LangGraph and LLM integrations.
+- **Runtime**: LangGraph (graph-based execution).
+	- Rationale: explicit node/edge model mirrors the visual workflow builder, supports conditional routing and loop control, auditable execution trace.
+- **Frontend**: React + Vite + React Flow.
+	- Rationale: rapid UI development, high-quality drag-and-drop flow libraries, fast local dev server.
+- **Persistence**: SQLite (default) with SQLAlchemy; swappable to Postgres for production.
+	- Rationale: zero-config local persistence during demos; simple migrations to more robust DB.
+- **Messaging Channel**: Telegram (bot in polling mode).
+	- Rationale: easiest local integration (no public webhook/hosting required), reliable developer experience.
+- **LLM Provider**: OpenAI-compatible endpoints (configurable via env). Supports Azure Inference or other OpenAI-compatible endpoints.
+	- Rationale: provider-agnostic approach lets you swap providers by changing model strings and keys.
+
+**Architecture Diagram**
+
+```mermaid
+flowchart TD
+	subgraph UI
+		A[React + Vite UI]
+	end
+	subgraph API
+		B[FastAPI]
+		B --> C[OrchestratorService]
+		B --> D[WebSocket LogBus]
+	end
+	subgraph Runtime
+		E[LangGraph Execution Engine]
+	end
+	subgraph DB
+		F[SQLite / SQLAlchemy]
+	end
+	subgraph Messaging
+		G[Telegram Bridge]
+	end
+	A -->|REST / WS| B
+	B -->|invoke| E
+	E -->|persist| F
+	E -->|events| D
+	G -->|inbound/outbound| B
+	B -->|read/write| F
 ```
 
-## Tech Stack
+**Getting Started (Local)**
 
-- Backend: FastAPI
-- Runtime: LangGraph (`StateGraph`)
-- LLM: Azure Inference endpoint (`https://models.inference.ai.azure.com`) with OpenAI-compatible client
-- Messaging: Telegram (`python-telegram-bot`, polling mode)
-- DB: SQLite + SQLAlchemy
-- Frontend: React + Vite + React Flow
-- Realtime: FastAPI WebSocket
+Prerequisites
+- Python 3.10+ and Node.js 16+ (or installers provided in environment)
 
-## Azure Inference Model Syntax
+Quick start (single command)
 
-This project uses the OpenAI-compatible interface against Azure Inference endpoint:
+1. Copy environment example and set required secrets:
 
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    api_key=os.environ["OPENAI_API_KEY"],  # or GITHUB_TOKEN
-    base_url="https://models.inference.ai.azure.com",
-)
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[
-        {"role": "system", "content": "..."},
-        {"role": "user", "content": "..."},
-    ],
-)
+```bash
+cp backend/.env.example backend/.env
+# Edit backend/.env and set OPENAI_API_KEY (or provider key) and TELEGRAM_BOT_TOKEN
 ```
 
-Implementation location: `backend/app/llm/github_models.py`.
-
-## Project Structure
-
-```text
-backend/
-  app/
-    api/routes/            # FastAPI endpoints
-    llm/github_models.py   # GitHub Models client adapter
-    runtime/graph_engine.py# LangGraph execution engine
-    services/              # orchestration + telegram bridge
-    models.py              # SQLAlchemy models
-    schemas.py             # API/domain schemas
-    templates.py           # prebuilt workflows
-frontend/
-  src/
-    components/            # Agent panel, canvas, run monitor
-run_local.py               # one-command setup + start
-```
-
-## Single Setup Command (Local)
-
-1. Configure env:
-   - copy `backend/.env.example` to `backend/.env`
-   - set `OPENAI_API_KEY` (or `GITHUB_TOKEN`)
-   - optionally set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_AGENT_ID`
-2. Run:
+2. Start everything locally (one command):
 
 ```bash
 python run_local.py
 ```
 
-This command automatically:
-- creates `.venv` in the project root (if missing)
-- installs backend dependencies into `.venv`
-- installs frontend dependencies (if needed)
-- starts backend/frontend services
+`run_local.py` will bootstrap a virtual environment, install backend/frontend dependencies if missing, and start backend and frontend services in development mode. If you prefer manual startup, use the manual steps below.
 
-Runtime URLs:
-- Backend: `http://localhost:8000`
-- Frontend: `http://localhost:5173`
+Manual start 
+(backend)
 
-## Manual Setup
-1. Backend:
 ```bash
 cd backend
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --port 8000
+python -m venv .venv
+.venv\Scripts\activate    # Windows
+# or: source .venv/bin/activate  # macOS / Linux
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
 ```
-2. Frontend (new terminal):
+
+Manual start (frontend)
+
 ```bash
 cd frontend
 npm install
-npm run dev -- --host 0.0.0.0 --port 5173
+npm run dev
 ```
 
-## End-to-End Demo Flow (Support Example)
+Default runtime URLs
+- Backend: `http://localhost:8000`
+- Frontend: `http://localhost:5173`
 
-1. Open `http://localhost:5173`.
-2. Use seeded workflow `Support Loop`.
-3. Submit prompt in Session panel:
-   - `Customer cannot log in after password reset. Ask for safe recovery steps and next actions.`
-4. Observe:
-   - node-by-node runtime events
-   - route decisions across conditional edges
-   - final strategy output
-   - token/cost metrics
-   - inter-agent message records
-5. Send a Telegram message to your bot and verify it responds via the configured Telegram-capable agent.
+**Configuration**
+- `backend/.env`: API keys and runtime options (e.g., `OPENAI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `DB_URL`).
+- Agents and workflows are manageable from the UI or via the API endpoints.
 
-## Verification Playbook
 
-### 1) Verify Feedback Loop Execution
-
-Goal: prove `reviewer -> router` loop works when reviewer output contains `revise`.
-
-1. Open workflow `Support Loop`.
-2. Ensure edge conditions are:
-   - `router -> responder = always`
-   - `responder -> reviewer = always`
-   - `reviewer -> router = contains:revise`
-3. Temporarily update reviewer system prompt to force one revision:
-   - Example: `Always include the word revise in your first response, then continue normally.`
-4. Run a thread with any support query.
-5. Confirm in **Live Feed**:
-   - one `edge_selected` event showing `reviewer -> router`
-   - then another node cycle after reviewer (loop happened)
-6. Reset reviewer prompt back to normal after test.
-
-### 2) Verify Guardrail (`max_steps`)
-
-Goal: prove loop protection stops runaway cycles.
-
-1. Set workflow `Max steps` to a low number (for example `3`) and click `Save`.
-2. Use loop-friendly conditions/prompt so revision is likely.
-3. Run workflow and check **Live Feed** for `guardrail_stop`.
-4. Confirm execution status ends as completed/terminated, not infinite.
-
-### 3) Verify Memory / Context Behavior
-
-Current MVP behavior:
-- Agent `memory` is persisted and injected into node prompt.
-- Recent thread history (last few user/assistant turns) is appended to subsequent runs in the same thread.
-
-How to test thread context:
-1. In `Thread 1`, run query A: `User forgot password and 2FA device changed.`
-2. In same thread, run query B: `Give me the follow-up plan based on previous advice.`
-3. Validate B output references prior context from query A.
-
-How to test agent memory injection:
-1. Update an agent via API with memory payload (example):
-```bash
-curl -X PUT http://localhost:8000/api/agents/<agent_id> \
-  -H "Content-Type: application/json" \
-  -d "{\"memory\":{\"tone\":\"formal\",\"region\":\"US\"}}"
-```
-2. Run workflow and verify generated output reflects that profile tendency.
-
-## Telegram Demo Checklist
-
-1. Set `TELEGRAM_BOT_TOKEN` in `backend/.env`.
-2. Optionally set `TELEGRAM_AGENT_ID` to force a specific agent, or ensure one agent has `telegram` in `channels`.
-3. Restart backend.
-4. Check backend terminal log:
-   - `telegram bridge starting in polling mode.` (success)
-   - `telegram disabled ...` (token missing)
-5. In Telegram chat with your bot:
-   - send `/start` and verify welcome message.
-   - send a normal message and verify agent-generated response.
-6. Confirm runtime telemetry:
-   - terminal/log bus includes `telegram_message` events.
-
-## Implemented vs Planned (MVP)
-
-- Implemented:
-  - Agent CRUD
-  - Conditional workflow edges + feedback loops
-  - Max-step guardrail
-  - Agent output guardrails (`max_output_chars`, `blocked_terms`)
-  - Threaded history and monitoring
-  - Inter-agent handoff persistence
-- Partial:
-  - Memory/context management (agent memory profile + recent thread context)
-- Planned:
-  - Scheduled workflow triggers
-  - Skill/plugin execution framework
-
-## API Surface (MVP)
-
-- `GET/POST/PUT/DELETE /api/agents`
-- `GET/POST/PUT/DELETE /api/workflows`
-- `GET /api/workflows/templates/library`
-- `POST /api/workflows/templates/create`
-- `POST /api/executions` (async start)
-- `GET /api/executions/{id}`
-- `GET/POST/PUT/DELETE /api/threads`
-- `GET /api/monitoring/executions/{id}/logs`
-- `GET /api/monitoring/executions/{id}/messages`
-- `GET /api/monitoring/summary`
-- `DELETE /api/monitoring/history` (supports `thread_id` and `workflow_id`)
-- `WS /api/monitoring/ws/live`
-
-## Tests
-
-Critical path tests are included in `backend/tests/test_core_paths.py`:
-
-- Agent CRUD
-- Workflow execution completion
-- Inter-agent message delivery persistence
+**Tests**
+- Critical tests live in `backend/tests/` and cover agent CRUD and workflow execution.
 
 Run tests:
 
@@ -265,34 +135,39 @@ cd backend
 pytest
 ```
 
-## How To Add New Workflow Templates
+**How to Add Workflow Templates**
+1. Add template JSON or Python definitions in `backend/app/templates.py`.
+2. Include `nodes`, `edges`, `roles`, and optional `guardrails`.
+3. Restart backend or expose hot-reload for templates in the UI.
 
-1. Add template definition in `backend/app/templates.py`.
-2. Include:
-   - `id`, `name`, `description`
-   - template `nodes` with `role_hint`
-   - `edges` with conditions (`always`, `contains:*`, `regex:*`, etc.)
-3. In UI, users can instantiate templates using role-based agent mapping.
+**How to Add Messaging Channels**
+1. Implement a channel bridge under `backend/app/services/` following the Telegram bridge example.
+2. Wire the bridge into the FastAPI application lifespan events in `backend/app/main.py`.
+3. Ensure the bridge publishes inbound messages to the orchestrator and that outbound agent responses are posted back through the bridge.
 
-## How To Add New Messaging Channels
+**Scaling & Production Notes**
+- Swap SQLite for Postgres and run migrations.
+- Replace Telegram polling with webhooks + HTTPS endpoint behind a load balancer for production.
+- Move LangGraph runtime to a worker pool or containerized worker autoscaling.
+- Add auth, RBAC, and tenant isolation for multi-user deployments.
 
-1. Add a channel bridge service under `backend/app/services/`.
-2. Inject bridge startup/shutdown in `backend/app/main.py` lifespan.
-3. Reuse `OrchestratorService` for message-to-agent execution.
-4. Tag compatible agents by adding channel names in `channels`.
+**Tradeoffs & Alternatives**
+- Chosen LangGraph for a direct mapping between visual flows and execution graphs; an alternative like AutoGen could simplify multi-turn orchestration but may not map as directly to node/edge visual semantics.
+- Python/FastAPI provides fast iteration for demos; and more flexibility and ease to wire with Langchain based frameworks.
+- Telegram polling  to integrate and showcase simple messaging channel demo that minimizes setup friction.
 
-## Runtime Choice Justification
+**Extending the Project**
+- Add scheduler service for time-based workflow triggers.
+- Implement plugin system to register new tool integrations (file I/O, HTTP actions, database reducers).
+- Add richer memory stores (vector DB) for long-term memory and retrieval-augmented generation.
 
-- LangGraph over CrewAI/AutoGen:
-  - explicit graph model with conditional edges and loop control
-  - directly mirrors the visual builder mental model
-  - auditable control flow
-- FastAPI over Flask:
-  - async-native for WebSocket + background execution
-- Telegram polling over webhook:
-  - works fully local, no public URL or infra dependency
-- SQLite:
-  - zero-config local persistence; easy swap to Postgres later
-- Azure Inference Models:
-  - no direct paid OpenAI subscription required
-  - model string swap keeps provider portability
+**Contributing & Contact**
+- Follow standard GitHub workflow: fork, branch, PR with description and demo GIF.
+
+---
+
+If you want, I can also:
+- add a small `scripts/` helper to produce the demo GIF automatically;
+- add a checklist and sample `.env.example` values; or
+- run the test suite and report results locally.
+
