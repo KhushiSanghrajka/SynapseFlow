@@ -1,11 +1,11 @@
-# Agent Orchestration Platform
+# Synapse Flow
 
-This repository implements a local-first AI agent orchestration platform where users
-create configurable agents, wire them into visual workflows (with conditions and
-feedback loops), run workflows on a real runtime, and interact with agents via an
-external messaging channel. The project is designed to be runnable locally with a
-single command and to be demo-ready for an end-to-end workflow involving at least
-two agents and a live human conversation through a messaging channel.
+Synapse Flow is a local-first AI agent orchestration platform where users create
+configurable agents, wire them into visual workflows (with conditions and
+feedback loops), run workflows on a real runtime, and interact with agents via
+an external messaging channel. The project is designed to be runnable locally
+with a single command and to be demo-ready for an end-to-end workflow involving
+at least two agents and a live human conversation through a messaging channel.
 
 **Goals**
 - **Working demo**: run a multi-agent workflow end-to-end and interact with an agent via Telegram.
