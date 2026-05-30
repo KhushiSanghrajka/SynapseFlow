@@ -1,20 +1,20 @@
 # Synapse Flow
 
-Synapse Flow is a local-first AI agent orchestration platform where users create
+Synapse Flow is an AI agent orchestration platform where users create
 configurable agents, wire them into visual workflows (with conditions and
 feedback loops), run workflows on a real runtime, and interact with agents via
-an external messaging channel. The project is designed to be runnable locally
-with a single command and to be demo-ready for an end-to-end workflow involving
-at least two agents and a live human conversation through a messaging channel.
+external messaging channels. The project is designed to be runnable locally
+and supports multi-agent workflows and external messaging integrations.
 
 **Goals**
-- **Working demo**: run a multi-agent workflow end-to-end and interact with an agent via Telegram.
+- **Create Workflows**: run a multi-agent workflow end-to-end and interact with an agent via Telegram.
 - **Configurable agents**: personality, tools, schedules, memory, limits, channels.
 - **Visual workflow builder**: conditional routing, loops, and templates.
 - **Runtime-first**: agents execute real logic on a runtime (no UI-only mocks).
 - **Persisted history & monitoring**: message history, logs, token/cost telemetry.
 
-
+- <i>Demo:</i>
+Head over to `demo.webm` file and open it to check out a quick demo video. 
 
 **Repository Layout**
 - **`backend/`**: FastAPI app, runtime integration, services, DB models, tests.
@@ -166,8 +166,4 @@ pytest
 
 ---
 
-If you want, I can also:
-- add a small `scripts/` helper to produce the demo GIF automatically;
-- add a checklist and sample `.env.example` values; or
-- run the test suite and report results locally.
 
